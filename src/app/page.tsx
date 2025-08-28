@@ -1,5 +1,5 @@
-import { Chat } from '@/components/ui/chat';
-import { ThemeToggle } from './components/theme-toggle';
+import { Chat } from "@/components/ui/chat";
+import { ThemeToggle } from "./components/theme-toggle";
 
 export default function Home() {
   return (
