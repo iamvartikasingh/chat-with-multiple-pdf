@@ -22,27 +22,27 @@ export function Chat() {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    containerRef.current?.scrollTo({ top: containerRef.current.scrollHeight, behavior: "smooth" });
+    containerRef.current?.scrollTo({
+      top: containerRef.current.scrollHeight,
+      behavior: "smooth",
+    });
   }, [messages, lastSources]);
 
   async function sendToApi(question: string) {
-    // POST to your Next.js route that calls callChain()
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      // This payload MUST match your API route expectations (see step 2)
       body: JSON.stringify({ question, chatHistory: "" }),
     });
 
-    if (!res.body) {
-      throw new Error("No response body");
-    }
+    if (!res.body) throw new Error("No response body");
 
-    // stream plain text; parse trailing [SOURCES] JSON if present
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let fullText = "";
 
-    // add placeholder assistant msg we will append to
+    // placeholder assistant message to stream into
     const aiId = crypto.randomUUID();
     setMessages((prev) => [...prev, { id: aiId, role: "assistant", content: "" }]);
 
@@ -52,13 +52,13 @@ export function Chat() {
       const chunk = decoder.decode(value, { stream: true });
       fullText += chunk;
 
-      // live-update the last assistant message
+      // live append tokens to last assistant msg
       setMessages((prev) =>
         prev.map((m) => (m.id === aiId ? { ...m, content: (m.content || "") + chunk } : m))
       );
     }
 
-    // Try to extract trailing sources line: \n\n[SOURCES] [...]
+    // Extract trailing sources: \n\n[SOURCES] [...]
     const match = fullText.match(/\[SOURCES\]\s*(\[[\s\S]*\])\s*$/);
     if (match) {
       try {
@@ -78,19 +78,20 @@ export function Chat() {
     setLastSources([]);
 
     // push user message
-    const userMsg: Message = { id: crypto.randomUUID(), role: "user", content: text };
-    setMessages((prev) => [...prev, userMsg]);
+    setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", content: text }]);
     setInputText("");
 
     try {
       await sendToApi(text);
-    } catch (e) {
-      const errMsg: Message = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: "Sorry—something went wrong while contacting the server.",
-      };
-      setMessages((prev) => [...prev, errMsg]);
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: "Sorry—something went wrong while contacting the server.",
+        },
+      ]);
     } finally {
       setIsSending(false);
     }
