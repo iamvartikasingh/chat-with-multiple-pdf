@@ -1,46 +1,40 @@
-// src/app/api/chat/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { callChain } from "@/lib/langchain"; // make sure this path matches your project
+import { callChain } from "@/lib/langchain";
+import { UIMessage } from "ai";
+import { Message } from "@/components/ui/chat";
 
-// Minimal, SDK-v5-compatible incoming message type
-type IncomingMessage = {
-  id?: string;
-  role: "user" | "assistant" | "system" | "tool";
-  content:
-    | string
-    | Array<
-        | { type: "text"; text: string }
-        | { type: string; [k: string]: unknown } // ignore non-text parts
-      >;
+const formatMessage = (message: Message) => {
+  return `${message.role === "user" ? "Human" : "Assistant"}: ${
+    message.content
+  }`;
 };
-
-// Convert v5 message content to plain text
-/* eslint-disable @typescript-eslint/no-explicit-any */
-function toText(m: IncomingMessage) {
-    if (typeof m.content === "string") return m.content;
-    return m.content.map((p) => (p as any).text).join(" ").trim();
-  }
-  /* eslint-enable @typescript-eslint/no-explicit-any */
-
-const formatMessage = (m: IncomingMessage) =>
-  `${m.role === "user" ? "Human" : "Assistant"}: ${toText(m)}`;
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const messages: IncomingMessage[] = body.messages ?? [];
+  const messages: Message[] = body.messages ?? [];
+  console.log("Messages ", messages);
+  const formattedPreviousMessages = messages.slice(0, -1).map(formatMessage);
+  const question = messages[messages.length - 1].content;
 
-  const formattedPrevious = messages.slice(0, -1).map(formatMessage).join("\n");
-  const last = messages[messages.length - 1];
-  const question = last ? toText(last) : "";
+  console.log("Chat history ", formattedPreviousMessages.join("\n"));
 
   if (!question) {
-    return NextResponse.json("Error: No question in the request", { status: 400 });
+    return NextResponse.json("Error: No question in the request", {
+      status: 400,
+    });
   }
 
   try {
-    return await callChain({ question, chatHistory: formattedPrevious });
+    const streamingTextResponse = callChain({
+      question,
+      chatHistory: formattedPreviousMessages.join("\n"),
+    });
+
+    return streamingTextResponse;
   } catch (error) {
-    console.error("Internal server error", error);
-    return NextResponse.json("Error: Something went wrong. Try again!", { status: 500 });
+    console.error("Internal server error ", error);
+    return NextResponse.json("Error: Something went wrong. Try again!", {
+      status: 500,
+    });
   }
 }

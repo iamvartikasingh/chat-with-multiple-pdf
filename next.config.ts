@@ -1,7 +1,25 @@
+// next.config.ts
 import type { NextConfig } from "next";
+import bundleAnalyzer from "@next/bundle-analyzer";
 
-const nextConfig: NextConfig = {
-  /* config options here */
+const withBundleAnalyzer = bundleAnalyzer({
+  enabled: process.env.ANALYZE === "true",
+});
+
+const config: NextConfig = {
+  // Analyzer works with Webpack builds, so run `next build` (no --turbopack)
+  experimental: {
+    optimizePackageImports: [
+      "date-fns",
+      "lodash-es",
+      "lucide-react",
+      "@radix-ui/react-icons",
+    ],
+  },
+  modularizeImports: {
+    lodash: { transform: "lodash/{{member}}" },
+    "date-fns": { transform: "date-fns/{{member}}" },
+  },
 };
 
-export default nextConfig;
+export default withBundleAnalyzer(config);

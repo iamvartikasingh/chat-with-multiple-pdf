@@ -32,33 +32,42 @@ export function Chat() {
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      // This payload MUST match your API route expectations (see step 2)
       body: JSON.stringify({ question, chatHistory: "" }),
     });
-
-    if (!res.body) throw new Error("No response body");
-
+  
+    // Guard against bad route / HTML fallback
+    const ct = res.headers.get("content-type") || "";
+    if (!res.ok || ct.includes("text/html")) {
+      throw new Error("API route not found or returned HTML. Check src/app/api/chat/route.ts");
+    }
+  
+    // Body can be null; bail out early
+    if (!res.body) {
+      throw new Error("No response body (stream). Ensure your API returns a StreamingTextResponse.");
+    }
+  
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
-    let fullText = "";
-
-    // placeholder assistant message to stream into
+  
+    // Add a placeholder assistant message we’ll stream into
     const aiId = crypto.randomUUID();
     setMessages((prev) => [...prev, { id: aiId, role: "assistant", content: "" }]);
-
+  
+    let fullText = "";
+  
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
       const chunk = decoder.decode(value, { stream: true });
       fullText += chunk;
-
-      // live append tokens to last assistant msg
+  
+      // live-append to the AI bubble
       setMessages((prev) =>
-        prev.map((m) => (m.id === aiId ? { ...m, content: (m.content || "") + chunk } : m))
+        prev.map((m) => (m.id === aiId ? { ...m, content: (m.content ?? "") + chunk } : m))
       );
     }
-
-    // Extract trailing sources: \n\n[SOURCES] [...]
+  
+    // optional: parse trailing sources in the shape you emit from the API
     const match = fullText.match(/\[SOURCES\]\s*(\[[\s\S]*\])\s*$/);
     if (match) {
       try {
@@ -69,7 +78,6 @@ export function Chat() {
       }
     }
   }
-
   async function handleSendMessage() {
     const text = inputText.trim();
     if (!text || isSending) return;
