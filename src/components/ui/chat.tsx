@@ -32,16 +32,14 @@ export function Chat() {
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, chatHistory: "" }),
+      // send the shape your route expects
+      body: JSON.stringify({ message: question, chatHistory: "" }),
     });
   
-    // Guard against bad route / HTML fallback
     const ct = res.headers.get("content-type") || "";
     if (!res.ok || ct.includes("text/html")) {
       throw new Error("API route not found or returned HTML. Check src/app/api/chat/route.ts");
     }
-  
-    // Body can be null; bail out early
     if (!res.body) {
       throw new Error("No response body (stream). Ensure your API returns a StreamingTextResponse.");
     }
@@ -49,7 +47,7 @@ export function Chat() {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
   
-    // Add a placeholder assistant message we’ll stream into
+    // placeholder assistant bubble to stream into
     const aiId = crypto.randomUUID();
     setMessages((prev) => [...prev, { id: aiId, role: "assistant", content: "" }]);
   
@@ -61,22 +59,30 @@ export function Chat() {
       const chunk = decoder.decode(value, { stream: true });
       fullText += chunk;
   
-      // live-append to the AI bubble
+      // live-append tokens
       setMessages((prev) =>
         prev.map((m) => (m.id === aiId ? { ...m, content: (m.content ?? "") + chunk } : m))
       );
     }
   
-    // optional: parse trailing sources in the shape you emit from the API
-    const match = fullText.match(/\[SOURCES\]\s*(\[[\s\S]*\])\s*$/);
-    if (match) {
+    // --- cleanup & sources extraction (single block) ---
+    let answerText = fullText;
+    const sourcesMatch = fullText.match(/\[SOURCES\]\s*(\[[\s\S]*\])\s*$/);
+    if (sourcesMatch) {
+      // remove the trailing sources JSON from the visible message
+      answerText = fullText.replace(sourcesMatch[0], "").trim();
       try {
-        const parsed = JSON.parse(match[1]) as Array<{ snippet: string }>;
-        setLastSources(parsed.map((p) => p.snippet));
+        const parsed = JSON.parse(sourcesMatch[1]) as Array<{ snippet?: string; meta?: { source?: string } }>;
+        setLastSources(parsed.map((p, i) => p?.snippet || p?.meta?.source || `Source ${i + 1}`));
       } catch {
         // ignore parse errors
       }
     }
+  
+    // finalize the assistant bubble with just the summary text
+    setMessages((prev) =>
+      prev.map((m) => (m.id === aiId ? { ...m, content: answerText } : m))
+    );
   }
   async function handleSendMessage() {
     const text = inputText.trim();
